@@ -5,6 +5,8 @@ import { Device } from 'node-pixel-pusher/dist/types';
 const service = new PixelPusher.Service();
 
 service.on('discover', async (device: Device) => {
-  const deviceRenderer = new DeviceRenderer(device, 0);
+  const deviceRenderer = new DeviceRenderer(device, 15);
   await deviceRenderer.renderImage('./assets/images/venom.jpg');
+  deviceRenderer.renderClock();
+  deviceRenderer.renderText('Akuamakana');
 });
