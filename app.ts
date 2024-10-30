@@ -19,10 +19,13 @@ function handleError(error: unknown, res: Response) {
   }
 }
 
-// Helper to validate device index
-function validateDeviceIndex(deviceIndex: number | undefined): void {
-  if (deviceIndex !== undefined && (deviceIndex < 0 || deviceIndex >= deviceRenderers.length)) {
-    throw new Error('Invalid device index');
+function validateDeviceMacAddress(macAddress: string): void {
+  if (
+    !deviceRenderers.some(
+      (deviceRenderer) => deviceRenderer.device.deviceData.macAddress === macAddress
+    )
+  ) {
+    throw new Error('Device not found');
   }
 }
 
@@ -44,24 +47,25 @@ app.get('/connectedDevices', (req: Request, res: Response) => {
 
 // Display media (images or GIFs)
 app.post('/displayImage', async (req: Request, res: Response) => {
-  const { url, deviceIndex } = req.body;
+  const { url, deviceMacAddresses, fillColor, playbackSpeed } = req.body;
 
   try {
     if (!url) {
       throw new Error('URL is required');
     }
 
-    validateDeviceIndex(deviceIndex);
+    deviceMacAddresses.forEach(validateDeviceMacAddress);
     const isGifImage = await isGif(url);
     const renderMethod = isGifImage ? 'renderGif' : 'renderImage';
 
-    if (deviceIndex !== undefined) {
-      await deviceRenderers[deviceIndex][renderMethod](url);
-      res.status(200).send(`Media displayed successfully on device ${deviceIndex}`);
-    } else {
-      await Promise.all(deviceRenderers.map((deviceRenderer) => deviceRenderer[renderMethod](url)));
-      res.status(200).send('Media displayed successfully on all devices');
-    }
+    await Promise.all(
+      deviceRenderers
+        .filter((deviceRenderer) =>
+          deviceMacAddresses.includes(deviceRenderer.device.deviceData.macAddress)
+        )
+        .map((deviceRenderer) => deviceRenderer[renderMethod](url, { fillColor, playbackSpeed }))
+    );
+    res.status(200).send('Media displayed successfully');
   } catch (error) {
     handleError(error, res);
   }
@@ -69,26 +73,23 @@ app.post('/displayImage', async (req: Request, res: Response) => {
 
 // Display text
 app.post('/displayText', async (req: Request, res: Response) => {
-  const { text, deviceIndex, textAlignment, textColor } = req.body;
+  const { text, deviceMacAddresses, textAlignment, textColor } = req.body;
 
   try {
     if (!text) {
       throw new Error('Text is required');
     }
 
-    validateDeviceIndex(deviceIndex);
+    deviceMacAddresses.forEach(validateDeviceMacAddress);
 
-    if (deviceIndex !== undefined) {
-      await deviceRenderers[deviceIndex].renderText(text, { textAlignment, textColor });
-      res.status(200).send(`Text displayed successfully on device ${deviceIndex}`);
-    } else {
-      await Promise.all(
-        deviceRenderers.map((deviceRenderer) =>
-          deviceRenderer.renderText(text, { textAlignment, textColor })
+    await Promise.all(
+      deviceRenderers
+        .filter((deviceRenderer) =>
+          deviceMacAddresses.includes(deviceRenderer.device.deviceData.macAddress)
         )
-      );
-      res.status(200).send('Text displayed successfully on all devices');
-    }
+        .map((deviceRenderer) => deviceRenderer.renderText(text, { textAlignment, textColor }))
+    );
+    res.status(200).send('Text displayed successfully');
   } catch (error) {
     handleError(error, res);
   }
@@ -96,22 +97,21 @@ app.post('/displayText', async (req: Request, res: Response) => {
 
 // Display clock
 app.post('/displayClock', async (req: Request, res: Response) => {
-  const { deviceIndex, textColor, showAMPM, showSeconds } = req.body;
+  const { deviceMacAddresses, textColor, showAMPM, showSeconds, showDate } = req.body;
 
   try {
-    validateDeviceIndex(deviceIndex);
+    deviceMacAddresses.forEach(validateDeviceMacAddress);
 
-    if (deviceIndex !== undefined) {
-      await deviceRenderers[deviceIndex].renderClock({ textColor, showAMPM, showSeconds });
-      res.status(200).send(`Clock displayed successfully on device ${deviceIndex}`);
-    } else {
-      await Promise.all(
-        deviceRenderers.map((deviceRenderer) =>
-          deviceRenderer.renderClock({ textColor, showAMPM, showSeconds })
+    await Promise.all(
+      deviceRenderers
+        .filter((deviceRenderer) =>
+          deviceMacAddresses.includes(deviceRenderer.device.deviceData.macAddress)
         )
-      );
-      res.status(200).send('Clock displayed successfully on all devices');
-    }
+        .map((deviceRenderer) =>
+          deviceRenderer.renderClock({ textColor, showAMPM, showSeconds, showDate })
+        )
+    );
+    res.status(200).send('Clock displayed successfully');
   } catch (error) {
     handleError(error, res);
   }
@@ -124,4 +124,5 @@ app.listen(3000, () => {
 service.on('discover', (device: Device) => {
   const deviceRenderer = new DeviceRenderer(device, 30);
   deviceRenderers.push(deviceRenderer);
+  deviceRenderer.renderText(device.deviceData.macAddress, { textColor: 'green' });
 });

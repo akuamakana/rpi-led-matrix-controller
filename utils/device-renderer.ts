@@ -9,7 +9,8 @@ import {
 import { Device } from 'node-pixel-pusher/dist/types';
 import { parseGIF, decompressFrames, ParsedFrame } from 'gifuct-js';
 
-registerFont('./assets/fonts/Minecraftia.ttf', { family: 'Minecraftia' });
+const fontName = 'Minecraftia';
+registerFont('./assets/fonts/Minecraftia.ttf', { family: fontName });
 
 type Dims = {
   left: number;
@@ -58,9 +59,14 @@ class DeviceRenderer {
     }
   }
 
-  async renderImage(imageUrl: string, { fillColor = '#000000' } = {}) {
+  resetDisplay() {
     this.clearIntervals();
     this.canvasContext.clearRect(0, 0, this.width, this.height);
+    this.renderToDevice();
+  }
+
+  async renderImage(imageUrl: string, { fillColor = '#000000' } = {}) {
+    this.resetDisplay();
     this.canvasContext.fillStyle = fillColor;
     this.canvasContext.fillRect(0, 0, this.width, this.height);
     const image = await loadImage(imageUrl);
@@ -79,8 +85,8 @@ class DeviceRenderer {
     this.renderToDevice();
   }
 
-  async renderGif(imageUrl: string, { fillColor = '#000000' } = {}) {
-    this.clearIntervals();
+  async renderGif(imageUrl: string, { fillColor = '#000000', playbackSpeed = 1 } = {}) {
+    this.resetDisplay();
     const response = await fetch(imageUrl);
     const arrayBuffer = await response.arrayBuffer();
     const gif = parseGIF(arrayBuffer);
@@ -130,7 +136,7 @@ class DeviceRenderer {
       }
     };
 
-    this.gifInterval = setInterval(() => {
+    const renderNextFrame = () => {
       const frame = frames[frameIndex];
 
       // Handle previous frame cleanup
@@ -208,13 +214,24 @@ class DeviceRenderer {
       prevFrameDims = { ...frame.dims };
       prevDisposalType = frame.disposalType;
 
+      // Calculate next frame's delay
+      const nextFrameIndex = (frameIndex + 1) % totalFrames;
+      const nextFrame = frames[nextFrameIndex];
+      const delay = Math.max(nextFrame.delay || 100, 20) / playbackSpeed; // Ensure minimum delay of 20ms
+
       // Update frame index
-      frameIndex = (frameIndex + 1) % totalFrames;
-    }, frames[0].delay);
+      frameIndex = nextFrameIndex;
+
+      // Schedule next frame
+      this.gifInterval = setTimeout(renderNextFrame, delay);
+    };
+
+    // Start the animation
+    renderNextFrame();
   }
 
   renderText(text: string, { textAlignment = 'center', textColor = 'white' } = {}) {
-    this.clearIntervals();
+    this.resetDisplay();
     // Calculate total width of the text once, outside the interval
     const totalWidth = this.canvasContext.measureText(text).width;
 
@@ -236,7 +253,8 @@ class DeviceRenderer {
       this.canvasContext.clearRect(0, 0, this.width, this.height);
 
       // Set font and vertical centering
-      this.canvasContext.font = '12px Minecraftia';
+      // Use with canvas
+      this.canvasContext.font = `12px ${fontName}`;
       const xPadding = 25;
 
       if (totalWidth > this.width) {
@@ -258,9 +276,14 @@ class DeviceRenderer {
     }, 75);
   }
 
-  renderClock({ textColor = 'white', showSeconds = false, showAMPM = false } = {}) {
-    this.clearIntervals();
-    this.clockInterval = setInterval(() => {
+  renderClock({
+    textColor = 'white',
+    showSeconds = false,
+    showAMPM = false,
+    showDate = false,
+  } = {}) {
+    this.resetDisplay();
+    const renderClock = () => {
       // Clear canvas for new frame
       this.canvasContext.clearRect(0, 0, this.width, this.height);
 
@@ -276,22 +299,29 @@ class DeviceRenderer {
         .replace(showAMPM ? '' : / AM| PM/, '');
 
       // Set font and measure text
-      this.canvasContext.font = '12px Minecraftia';
+      this.canvasContext.font = `12px ${fontName}`;
 
       // Measure the total width of the entire clock text
       const totalWidth = this.canvasContext.measureText(clock).width;
 
       // Calculate starting x position to center text
-      const x = (this.width - totalWidth) / 2;
+      const x = (this.width - totalWidth - 12) / 2;
       const yCenter = (this.height + 30) / 2; // Approximation for vertical centering
 
       // Set color and render the entire clock text centered
       this.canvasContext.fillStyle = textColor;
+      if (showDate) {
+        this.canvasContext.fillText('Wednesday', x, yCenter - 13);
+      }
       this.canvasContext.fillText(clock, x, yCenter);
 
       // Render to device
       this.renderToDevice();
-    }, 1000);
+    };
+
+    renderClock();
+
+    this.clockInterval = setInterval(renderClock, 1000);
   }
 
   renderToDevice(xPos: number = 0, yPos: number = 0) {
