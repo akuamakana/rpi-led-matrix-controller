@@ -55,7 +55,7 @@ class DeviceRenderer {
     this.renderToDevice();
   }
 
-  renderText(text: string, { textAlignment = 'center' } = {}) {
+  renderText(text: string, { textAlignment = 'center', textColor = 'white' } = {}) {
     this.clearIntervals();
     // Calculate total width of the text once, outside the interval
     const totalWidth = this.canvasContext.measureText(text).width;
@@ -70,7 +70,7 @@ class DeviceRenderer {
           yCenter = this.height + 7;
           break;
         default:
-          yCenter = (this.height + 24) / 2;
+          yCenter = (this.height + 25) / 2;
           break;
       }
       let x = 0;
@@ -92,7 +92,7 @@ class DeviceRenderer {
       }
 
       // Set color and render text
-      this.canvasContext.fillStyle = 'white';
+      this.canvasContext.fillStyle = textColor;
       this.canvasContext.fillText(text, x, yCenter);
 
       // Render to device
@@ -100,7 +100,7 @@ class DeviceRenderer {
     }, 75);
   }
 
-  renderClock() {
+  renderClock({ textColor = 'white', showSeconds = false, showAMPM = false } = {}) {
     this.clearIntervals();
     this.clockInterval = setInterval(() => {
       // Clear canvas for new frame
@@ -108,33 +108,28 @@ class DeviceRenderer {
 
       // Get current time and format it
       const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-
-      const clock = `${hours}:${minutes}:${seconds}`;
+      const clock = now
+        .toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: 'numeric',
+          second: showSeconds ? 'numeric' : undefined,
+          hour12: true,
+        })
+        .replace(showAMPM ? '' : / AM| PM/, '');
 
       // Set font and measure text
       this.canvasContext.font = '12px Minecraftia';
-      const letterSpacing = 1; // Adjust as needed for more or less spacing
 
-      // Measure total width of text with custom spacing
-      let totalWidth = 0;
-      for (const char of clock) {
-        totalWidth += this.canvasContext.measureText(char).width + letterSpacing;
-      }
-      totalWidth -= letterSpacing; // Remove last added spacing
+      // Measure the total width of the entire clock text
+      const totalWidth = this.canvasContext.measureText(clock).width;
 
       // Calculate starting x position to center text
-      let x = (this.width - totalWidth) / 2;
+      const x = (this.width - totalWidth) / 2;
       const yCenter = (this.height + 30) / 2; // Approximation for vertical centering
 
-      // Set color and render each character with spacing
-      this.canvasContext.fillStyle = 'white';
-      for (const char of clock) {
-        this.canvasContext.fillText(char, x, yCenter);
-        x += this.canvasContext.measureText(char).width + letterSpacing; // Move x by width of char + spacing
-      }
+      // Set color and render the entire clock text centered
+      this.canvasContext.fillStyle = textColor;
+      this.canvasContext.fillText(clock, x, yCenter);
 
       // Render to device
       this.renderToDevice();
