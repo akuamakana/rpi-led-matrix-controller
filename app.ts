@@ -37,6 +37,23 @@ app.post('/displayImage', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/displayGif', async (req: Request, res: Response) => {
+  const { url, deviceIndex } = req.body;
+  try {
+    if (!url) {
+      throw new Error('URL is required');
+    }
+    if (deviceIndex !== undefined) {
+      await deviceRenderers[deviceIndex].renderGif(url);
+    } else {
+      await Promise.all(deviceRenderers.map((deviceRenderer) => deviceRenderer.renderGif(url)));
+    }
+    res.status(200).send('GIF displayed successfully');
+  } catch (error) {
+    res.status(500).send('Failed to display GIF');
+  }
+});
+
 app.post('/displayText', (req: Request, res: Response) => {
   const { text, deviceIndex, textAlignment, textColor } = req.body;
   try {
@@ -74,6 +91,6 @@ app.listen(3000, () => {
 });
 
 service.on('discover', (device: Device) => {
-  const deviceRenderer = new DeviceRenderer(device, 15);
+  const deviceRenderer = new DeviceRenderer(device, 30);
   deviceRenderers.push(deviceRenderer);
 });

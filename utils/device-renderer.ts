@@ -1,7 +1,22 @@
-import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D, registerFont } from 'canvas';
+import {
+  createCanvas,
+  loadImage,
+  Canvas,
+  CanvasRenderingContext2D,
+  registerFont,
+  ImageData,
+} from 'canvas';
 import { Device } from 'node-pixel-pusher/dist/types';
+import { parseGIF, decompressFrames } from 'gifuct-js';
 
 registerFont('./assets/fonts/Minecraftia.ttf', { family: 'Minecraftia' });
+
+type Dims = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 class DeviceRenderer {
   device: Device;
@@ -13,6 +28,7 @@ class DeviceRenderer {
   scrollOffset: number;
   clockInterval: NodeJS.Timeout | null;
   textInterval: NodeJS.Timeout | null;
+  gifInterval: NodeJS.Timeout | null;
 
   constructor(device: Device, maxFPS: number = 15) {
     this.device = device;
@@ -24,6 +40,7 @@ class DeviceRenderer {
     this.scrollOffset = 0;
     this.clockInterval = null;
     this.textInterval = null;
+    this.gifInterval = null;
   }
 
   clearIntervals() {
@@ -34,6 +51,10 @@ class DeviceRenderer {
     if (this.clockInterval) {
       clearInterval(this.clockInterval);
       this.clockInterval = null;
+    }
+    if (this.gifInterval) {
+      clearInterval(this.gifInterval);
+      this.gifInterval = null;
     }
   }
 
@@ -53,6 +74,148 @@ class DeviceRenderer {
     this.canvasContext.drawImage(image, xOffset, 0, targetWidth, targetHeight);
 
     this.renderToDevice();
+  }
+
+  async renderGif(imageUrl: string) {
+    this.clearIntervals();
+    const response = await fetch(imageUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const gif = parseGIF(arrayBuffer);
+    const frames = decompressFrames(gif, true);
+
+    let frameIndex = 0;
+    const totalFrames = frames.length;
+
+    // Create an off-screen canvas for the current frame
+    const frameCanvas = createCanvas(frames[0].dims.width, frames[0].dims.height);
+    const frameContext = frameCanvas.getContext('2d');
+
+    // Create an off-screen canvas for the composited result
+    const compositedCanvas = createCanvas(frames[0].dims.width, frames[0].dims.height);
+    const compositedContext = compositedCanvas.getContext('2d');
+
+    // Create a backup canvas for disposal method 3
+    const backupCanvas = createCanvas(frames[0].dims.width, frames[0].dims.height);
+    const backupContext = backupCanvas.getContext('2d');
+
+    // Track the previous frame's dimensions for proper clearing
+    let prevFrameDims: Dims | null = null;
+
+    // Initialize background
+    compositedContext.fillStyle = '#000000';
+    compositedContext.fillRect(0, 0, compositedCanvas.width, compositedCanvas.height);
+
+    this.gifInterval = setInterval(() => {
+      const frame = frames[frameIndex];
+
+      // If this is not the first frame and we have previous dimensions
+      if (prevFrameDims && frameIndex > 0) {
+        const prevFrame = frames[frameIndex - 1];
+
+        // Clear based on previous frame's disposal type
+        switch (prevFrame.disposalType) {
+          case 2: // Restore to background
+            compositedContext.clearRect(
+              prevFrameDims.left,
+              prevFrameDims.top,
+              prevFrameDims.width,
+              prevFrameDims.height
+            );
+            compositedContext.fillStyle = '#000000';
+            compositedContext.fillRect(
+              prevFrameDims.left,
+              prevFrameDims.top,
+              prevFrameDims.width,
+              prevFrameDims.height
+            );
+            break;
+
+          case 3: // Restore to previous
+            // Restore from backup canvas
+            compositedContext.drawImage(backupCanvas, 0, 0);
+            break;
+
+          case 0: // No disposal specified
+          case 1: // Do not dispose
+            // Leave the previous frame as is
+            break;
+        }
+      }
+
+      // Before drawing a new frame with disposal type 3,
+      // backup the current state
+      if (frame.disposalType === 3) {
+        backupContext.clearRect(0, 0, backupCanvas.width, backupCanvas.height);
+        backupContext.drawImage(compositedCanvas, 0, 0);
+      }
+
+      // Create ImageData for the current frame
+      const patchData = new Uint8ClampedArray(frame.patch);
+
+      // Handle transparency
+      if (frame.transparentIndex !== null) {
+        for (let i = 0; i < frame.pixels.length; i++) {
+          const pixelIndex = i * 4 + 3; // Alpha channel index
+          if (frame.pixels[i] === frame.transparentIndex) {
+            patchData[pixelIndex] = 0; // Set transparent
+          }
+        }
+      }
+
+      const imageData = new ImageData(patchData, frame.dims.width, frame.dims.height);
+
+      // Clear and draw the current frame to the frame canvas
+      frameContext.clearRect(0, 0, frameCanvas.width, frameCanvas.height);
+      frameContext.putImageData(imageData, 0, 0);
+
+      // Set appropriate compositing mode based on transparency
+      compositedContext.globalCompositeOperation =
+        frame.transparentIndex !== null ? 'source-over' : 'copy';
+
+      // Composite the frame onto the result
+      compositedContext.drawImage(
+        frameCanvas,
+        0,
+        0,
+        frame.dims.width,
+        frame.dims.height,
+        frame.dims.left,
+        frame.dims.top,
+        frame.dims.width,
+        frame.dims.height
+      );
+
+      // Reset composite operation
+      compositedContext.globalCompositeOperation = 'source-over';
+
+      // Draw the final composited result to the main canvas
+      this.canvasContext.clearRect(0, 0, this.width, this.height);
+      this.canvasContext.drawImage(
+        compositedCanvas,
+        0,
+        0,
+        compositedCanvas.width,
+        compositedCanvas.height,
+        0,
+        0,
+        this.width,
+        this.height
+      );
+
+      // Render to device
+      this.renderToDevice();
+
+      // Store current frame dimensions for next iteration
+      prevFrameDims = { ...frame.dims };
+
+      // Update frame index
+      frameIndex = (frameIndex + 1) % totalFrames;
+
+      // If we're starting over, reset prevFrameDims
+      if (frameIndex === 0) {
+        prevFrameDims = null;
+      }
+    }, frames[0].delay);
   }
 
   renderText(text: string, { textAlignment = 'center', textColor = 'white' } = {}) {
