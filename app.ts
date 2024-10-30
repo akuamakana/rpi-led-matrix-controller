@@ -47,7 +47,7 @@ app.get('/connectedDevices', (req: Request, res: Response) => {
 
 // Display media (images or GIFs)
 app.post('/displayImage', async (req: Request, res: Response) => {
-  const { url, deviceMacAddresses, fillColor, playbackSpeed } = req.body;
+  const { url, deviceMacAddresses, fillColor } = req.body;
 
   try {
     if (!url) {
@@ -63,7 +63,7 @@ app.post('/displayImage', async (req: Request, res: Response) => {
         .filter((deviceRenderer) =>
           deviceMacAddresses.includes(deviceRenderer.device.deviceData.macAddress)
         )
-        .map((deviceRenderer) => deviceRenderer[renderMethod](url, { fillColor, playbackSpeed }))
+        .map((deviceRenderer) => deviceRenderer[renderMethod](url, { fillColor }))
     );
     res.status(200).send('Media displayed successfully');
   } catch (error) {
@@ -124,5 +124,5 @@ app.listen(3000, () => {
 service.on('discover', (device: Device) => {
   const deviceRenderer = new DeviceRenderer(device, 30);
   deviceRenderers.push(deviceRenderer);
-  deviceRenderer.renderText(device.deviceData.macAddress, { textColor: 'green' });
+  deviceRenderer.renderText(device.deviceData.macAddress, { textColor: 'green', textAlignment: 'bottom' });
 });

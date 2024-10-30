@@ -1,16 +1,13 @@
-import {
-  createCanvas,
-  loadImage,
-  Canvas,
-  CanvasRenderingContext2D,
-  registerFont,
-  ImageData,
-} from 'canvas';
+import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 import { Device } from 'node-pixel-pusher/dist/types';
 import { parseGIF, decompressFrames, ParsedFrame } from 'gifuct-js';
+import { BDFFont, createBDFFont, DrawOptions } from './bdf-font';
 
-const fontName = 'Minecraftia';
-registerFont('./assets/fonts/Minecraftia.ttf', { family: fontName });
+let font: BDFFont;
+
+(async () => {
+  font = await createBDFFont('./assets/fonts/8x13.bdf');
+})();
 
 type Dims = {
   left: number;
@@ -31,7 +28,7 @@ class DeviceRenderer {
   textInterval: NodeJS.Timeout | null;
   gifInterval: NodeJS.Timeout | null;
 
-  constructor(device: Device, maxFPS: number = 15) {
+  constructor(device: Device, maxFPS: number) {
     this.device = device;
     this.width = device.deviceData.pixelsPerStrip;
     this.height = device.deviceData.numberStrips;
@@ -85,7 +82,7 @@ class DeviceRenderer {
     this.renderToDevice();
   }
 
-  async renderGif(imageUrl: string, { fillColor = '#000000', playbackSpeed = 1 } = {}) {
+  async renderGif(imageUrl: string, { fillColor = '#000000' } = {}) {
     this.resetDisplay();
     const response = await fetch(imageUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -217,7 +214,7 @@ class DeviceRenderer {
       // Calculate next frame's delay
       const nextFrameIndex = (frameIndex + 1) % totalFrames;
       const nextFrame = frames[nextFrameIndex];
-      const delay = Math.max(nextFrame.delay || 100, 20) / playbackSpeed; // Ensure minimum delay of 20ms
+      const delay = Math.max(nextFrame.delay || 100, 20); // Ensure minimum delay of 20ms
 
       // Update frame index
       frameIndex = nextFrameIndex;
@@ -236,16 +233,16 @@ class DeviceRenderer {
     const totalWidth = this.canvasContext.measureText(text).width;
 
     this.textInterval = setInterval(() => {
-      let yCenter = 0;
+      let y = 0;
       switch (textAlignment) {
         case 'top':
-          yCenter = 18;
+          y = 0;
           break;
         case 'bottom':
-          yCenter = this.height + 7;
+          y = this.height - 12;
           break;
         default:
-          yCenter = (this.height + 25) / 2;
+          y = Math.floor((this.height - 12) / 2);
           break;
       }
       let x = 0;
@@ -254,7 +251,6 @@ class DeviceRenderer {
 
       // Set font and vertical centering
       // Use with canvas
-      this.canvasContext.font = `12px ${fontName}`;
       const xPadding = 25;
 
       if (totalWidth > this.width) {
@@ -267,9 +263,13 @@ class DeviceRenderer {
         x = this.width - this.scrollOffset;
       }
 
-      // Set color and render text
-      this.canvasContext.fillStyle = textColor;
-      this.canvasContext.fillText(text, x, yCenter);
+      // Drawing options
+      const options: DrawOptions = {
+        color: textColor,
+      };
+
+      // Draw text
+      font.drawText(this.canvasContext, text, x, y, options);
 
       // Render to device
       this.renderToDevice();
@@ -299,21 +299,22 @@ class DeviceRenderer {
         .replace(showAMPM ? '' : / AM| PM/, '');
 
       // Set font and measure text
-      this.canvasContext.font = `12px ${fontName}`;
-
       // Measure the total width of the entire clock text
       const totalWidth = this.canvasContext.measureText(clock).width;
 
       // Calculate starting x position to center text
-      const x = (this.width - totalWidth - 12) / 2;
-      const yCenter = (this.height + 30) / 2; // Approximation for vertical centering
+      const x = 0;
+      const yCenter = Math.floor((this.height + 30) / 2); // Approximation for vertical centering
 
       // Set color and render the entire clock text centered
-      this.canvasContext.fillStyle = textColor;
+      const options: DrawOptions = {
+        color: textColor,
+        backgroundColor: '#000',
+      };
       if (showDate) {
-        this.canvasContext.fillText('Wednesday', x, yCenter - 13);
+        font.drawText(this.canvasContext, 'text', x, yCenter, options);
       }
-      this.canvasContext.fillText(clock, x, yCenter);
+      font.drawText(this.canvasContext, clock, x, yCenter, options);
 
       // Render to device
       this.renderToDevice();
