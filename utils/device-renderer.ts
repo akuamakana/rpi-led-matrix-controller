@@ -7,7 +7,7 @@ import {
   ImageData,
 } from 'canvas';
 import { Device } from 'node-pixel-pusher/dist/types';
-import { parseGIF, decompressFrames } from 'gifuct-js';
+import { parseGIF, decompressFrames, ParsedFrame } from 'gifuct-js';
 
 registerFont('./assets/fonts/Minecraftia.ttf', { family: 'Minecraftia' });
 
@@ -58,8 +58,11 @@ class DeviceRenderer {
     }
   }
 
-  async renderImage(imageUrl: string) {
+  async renderImage(imageUrl: string, { fillColor = '#000000' } = {}) {
     this.clearIntervals();
+    this.canvasContext.clearRect(0, 0, this.width, this.height);
+    this.canvasContext.fillStyle = fillColor;
+    this.canvasContext.fillRect(0, 0, this.width, this.height);
     const image = await loadImage(imageUrl);
 
     // Calculate aspect-ratio-preserved dimensions
@@ -76,7 +79,7 @@ class DeviceRenderer {
     this.renderToDevice();
   }
 
-  async renderGif(imageUrl: string) {
+  async renderGif(imageUrl: string, { fillColor = '#000000' } = {}) {
     this.clearIntervals();
     const response = await fetch(imageUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -98,48 +101,44 @@ class DeviceRenderer {
     const backupCanvas = createCanvas(frames[0].dims.width, frames[0].dims.height);
     const backupContext = backupCanvas.getContext('2d');
 
-    // Track the previous frame's dimensions for proper clearing
+    // Track the previous frame's dimensions and disposal type for proper clearing
     let prevFrameDims: Dims | null = null;
+    let prevDisposalType = null;
 
     // Initialize background
-    compositedContext.fillStyle = '#000000';
+    compositedContext.fillStyle = fillColor;
     compositedContext.fillRect(0, 0, compositedCanvas.width, compositedCanvas.height);
+
+    const clearPreviousFrame = (prevFrame: ParsedFrame, dims: Dims | null) => {
+      if (!dims) return;
+
+      switch (prevFrame.disposalType) {
+        case 2: // Restore to background
+          compositedContext.clearRect(dims.left, dims.top, dims.width, dims.height);
+          compositedContext.fillStyle = fillColor;
+          compositedContext.fillRect(dims.left, dims.top, dims.width, dims.height);
+          break;
+
+        case 3: // Restore to previous
+          compositedContext.drawImage(backupCanvas, 0, 0);
+          break;
+
+        case 0: // No disposal specified
+        case 1: // Do not dispose
+          // Leave the previous frame as is
+          break;
+      }
+    };
 
     this.gifInterval = setInterval(() => {
       const frame = frames[frameIndex];
 
-      // If this is not the first frame and we have previous dimensions
-      if (prevFrameDims && frameIndex > 0) {
-        const prevFrame = frames[frameIndex - 1];
-
-        // Clear based on previous frame's disposal type
-        switch (prevFrame.disposalType) {
-          case 2: // Restore to background
-            compositedContext.clearRect(
-              prevFrameDims.left,
-              prevFrameDims.top,
-              prevFrameDims.width,
-              prevFrameDims.height
-            );
-            compositedContext.fillStyle = '#000000';
-            compositedContext.fillRect(
-              prevFrameDims.left,
-              prevFrameDims.top,
-              prevFrameDims.width,
-              prevFrameDims.height
-            );
-            break;
-
-          case 3: // Restore to previous
-            // Restore from backup canvas
-            compositedContext.drawImage(backupCanvas, 0, 0);
-            break;
-
-          case 0: // No disposal specified
-          case 1: // Do not dispose
-            // Leave the previous frame as is
-            break;
-        }
+      // Handle previous frame cleanup
+      if (frameIndex > 0) {
+        clearPreviousFrame(frames[frameIndex - 1], prevFrameDims);
+      } else if (frameIndex === 0 && prevFrameDims) {
+        // We're back at the start - clean up the last frame
+        clearPreviousFrame(frames[totalFrames - 1], prevFrameDims);
       }
 
       // Before drawing a new frame with disposal type 3,
@@ -205,16 +204,12 @@ class DeviceRenderer {
       // Render to device
       this.renderToDevice();
 
-      // Store current frame dimensions for next iteration
+      // Store current frame information for next iteration
       prevFrameDims = { ...frame.dims };
+      prevDisposalType = frame.disposalType;
 
       // Update frame index
       frameIndex = (frameIndex + 1) % totalFrames;
-
-      // If we're starting over, reset prevFrameDims
-      if (frameIndex === 0) {
-        prevFrameDims = null;
-      }
     }, frames[0].delay);
   }
 
