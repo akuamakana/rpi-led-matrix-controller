@@ -136,7 +136,7 @@ export class BDFFont {
     const {
       scale = 1,
       color = 'white',
-      backgroundColor = 'black',
+      backgroundColor,
       spacing = -1, // Default spacing of 1 pixel
     } = options;
 
@@ -187,7 +187,7 @@ export class BDFFont {
   }
 
   // Helper method to measure text width with custom spacing
-  public async measureText(text: string, scale: number = 1, spacing: number = 1): Promise<number> {
+  public async measureText(text: string, scale: number = 1, spacing: number = -1): Promise<number> {
     await this.ready();
 
     let width = 0;

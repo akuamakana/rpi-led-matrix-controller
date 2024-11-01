@@ -3,11 +3,17 @@ import DeviceRenderer from './utils/device-renderer.js';
 import { Device } from 'node-pixel-pusher/dist/types';
 import express, { Request, Response } from 'express';
 import { isGif } from './utils/helpers.js';
+import { BDFFont, createBDFFont } from './utils/bdf-font.js';
 
 const service = new PixelPusher.Service();
 const deviceRenderers: DeviceRenderer[] = [];
 const app = express();
 app.use(express.json());
+let font: BDFFont;
+
+(async () => {
+  font = await createBDFFont('./assets/fonts/8x13.bdf');
+})();
 
 // Helper to handle errors consistently
 function handleError(error: unknown, res: Response) {
@@ -122,7 +128,10 @@ app.listen(3000, () => {
 });
 
 service.on('discover', (device: Device) => {
-  const deviceRenderer = new DeviceRenderer(device, 30);
+  const deviceRenderer = new DeviceRenderer(device, font);
   deviceRenderers.push(deviceRenderer);
-  deviceRenderer.renderText(device.deviceData.macAddress, { textColor: 'green', textAlignment: 'bottom' });
+  deviceRenderer.renderText(device.deviceData.macAddress, {
+    textColor: 'green',
+    textAlignment: 'bottom',
+  });
 });

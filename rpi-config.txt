@@ -1,10 +1,9 @@
 ./pixel-push \
   --led-show-refresh \
-  --led-rows=32 \
+  --led-rows=64 \
   --led-cols=64 \
   --led-parallel=1 \
   --led-chain=1 \
-  --led-slowdown-gpio=2 \
   --led-gpio-mapping=adafruit-hat-pwm \
   -i wlan0 \
   -u 65507

@@ -1,13 +1,7 @@
 import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 import { Device } from 'node-pixel-pusher/dist/types';
 import { parseGIF, decompressFrames, ParsedFrame } from 'gifuct-js';
-import { BDFFont, createBDFFont, DrawOptions } from './bdf-font';
-
-let font: BDFFont;
-
-(async () => {
-  font = await createBDFFont('./assets/fonts/8x13.bdf');
-})();
+import { BDFFont, DrawOptions } from './bdf-font';
 
 type Dims = {
   left: number;
@@ -27,8 +21,9 @@ class DeviceRenderer {
   clockInterval: NodeJS.Timeout | null;
   textInterval: NodeJS.Timeout | null;
   gifInterval: NodeJS.Timeout | null;
+  font: BDFFont;
 
-  constructor(device: Device, maxFPS: number) {
+  constructor(device: Device, font: BDFFont, maxFPS: number = 30) {
     this.device = device;
     this.width = device.deviceData.pixelsPerStrip;
     this.height = device.deviceData.numberStrips;
@@ -39,6 +34,7 @@ class DeviceRenderer {
     this.clockInterval = null;
     this.textInterval = null;
     this.gifInterval = null;
+    this.font = font;
   }
 
   clearIntervals() {
@@ -227,16 +223,16 @@ class DeviceRenderer {
     renderNextFrame();
   }
 
-  renderText(text: string, { textAlignment = 'center', textColor = 'white' } = {}) {
+  async renderText(text: string, { textAlignment = 'center', textColor = 'white' } = {}) {
     this.resetDisplay();
     // Calculate total width of the text once, outside the interval
-    const totalWidth = this.canvasContext.measureText(text).width;
+    const totalWidth = await this.font.measureText(text);
 
     this.textInterval = setInterval(() => {
       let y = 0;
       switch (textAlignment) {
         case 'top':
-          y = 0;
+          y = 0 - 2;
           break;
         case 'bottom':
           y = this.height - 12;
@@ -249,14 +245,10 @@ class DeviceRenderer {
       // Clear canvas for new frame
       this.canvasContext.clearRect(0, 0, this.width, this.height);
 
-      // Set font and vertical centering
-      // Use with canvas
-      const xPadding = 25;
-
       if (totalWidth > this.width) {
         // Update scrollOffset to move text left and reset when it goes completely off screen
         this.scrollOffset += 1;
-        if (this.scrollOffset > totalWidth + this.width + xPadding) {
+        if (this.scrollOffset > totalWidth + this.width) {
           this.scrollOffset = 0; // Reset to initial position on the right
         }
         // Calculate x position for scrolling text from right to left
@@ -269,7 +261,7 @@ class DeviceRenderer {
       };
 
       // Draw text
-      font.drawText(this.canvasContext, text, x, y, options);
+      this.font.drawText(this.canvasContext, text, x, y, options);
 
       // Render to device
       this.renderToDevice();
@@ -298,13 +290,9 @@ class DeviceRenderer {
         })
         .replace(showAMPM ? '' : / AM| PM/, '');
 
-      // Set font and measure text
-      // Measure the total width of the entire clock text
-      const totalWidth = this.canvasContext.measureText(clock).width;
-
       // Calculate starting x position to center text
       const x = 0;
-      const yCenter = Math.floor((this.height + 30) / 2); // Approximation for vertical centering
+      const y = this.height - 12; // Approximation for vertical centering
 
       // Set color and render the entire clock text centered
       const options: DrawOptions = {
@@ -312,9 +300,12 @@ class DeviceRenderer {
         backgroundColor: '#000',
       };
       if (showDate) {
-        font.drawText(this.canvasContext, 'text', x, yCenter, options);
+        const date = now.toLocaleDateString('en-US', {
+          weekday: 'long',
+        });
+        this.font.drawText(this.canvasContext, date, x, y - 12, options);
       }
-      font.drawText(this.canvasContext, clock, x, yCenter, options);
+      this.font.drawText(this.canvasContext, clock, x, y, options);
 
       // Render to device
       this.renderToDevice();
