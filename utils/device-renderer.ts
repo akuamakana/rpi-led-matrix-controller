@@ -23,6 +23,7 @@ class DeviceRenderer {
   textInterval: NodeJS.Timeout | null;
   gifInterval: NodeJS.Timeout | null;
   font: BDFFont;
+  weather: WeatherOpenMateo;
 
   constructor(device: Device, font: BDFFont, maxFPS: number = 30) {
     this.device = device;
