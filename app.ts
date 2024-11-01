@@ -6,7 +6,7 @@ import { isGif } from './utils/helpers.js';
 import { BDFFont, createBDFFont } from './utils/bdf-font.js';
 
 const service = new PixelPusher.Service();
-const deviceRenderers: DeviceRenderer[] = [];
+let deviceRenderers: DeviceRenderer[] = [];
 const app = express();
 app.use(express.json());
 let font: BDFFont;
@@ -103,7 +103,7 @@ app.post('/displayText', async (req: Request, res: Response) => {
 
 // Display clock
 app.post('/displayClock', async (req: Request, res: Response) => {
-  const { deviceMacAddresses, textColor, showAMPM, showSeconds, showDate } = req.body;
+  const { deviceMacAddresses, textColor, showAMPM, showSeconds, showDate, showWeather } = req.body;
 
   try {
     deviceMacAddresses.forEach(validateDeviceMacAddress);
@@ -114,7 +114,7 @@ app.post('/displayClock', async (req: Request, res: Response) => {
           deviceMacAddresses.includes(deviceRenderer.device.deviceData.macAddress)
         )
         .map((deviceRenderer) =>
-          deviceRenderer.renderClock({ textColor, showAMPM, showSeconds, showDate })
+          deviceRenderer.renderClock({ textColor, showAMPM, showSeconds, showDate, showWeather })
         )
     );
     res.status(200).send('Clock displayed successfully');
@@ -130,6 +130,7 @@ app.listen(3000, () => {
 service.on('discover', (device: Device) => {
   const deviceRenderer = new DeviceRenderer(device, font);
   deviceRenderers.push(deviceRenderer);
+  deviceRenderers = [...new Set(deviceRenderers)];
   deviceRenderer.renderText(device.deviceData.macAddress, {
     textColor: 'green',
     textAlignment: 'bottom',

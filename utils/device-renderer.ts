@@ -2,6 +2,7 @@ import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D, ImageData } 
 import { Device } from 'node-pixel-pusher/dist/types';
 import { parseGIF, decompressFrames, ParsedFrame } from 'gifuct-js';
 import { BDFFont, DrawOptions } from './bdf-font';
+import { WeatherOpenMateo } from './weather';
 
 type Dims = {
   left: number;
@@ -35,6 +36,7 @@ class DeviceRenderer {
     this.textInterval = null;
     this.gifInterval = null;
     this.font = font;
+    this.weather = new WeatherOpenMateo();
   }
 
   clearIntervals() {
@@ -78,7 +80,13 @@ class DeviceRenderer {
     this.renderToDevice();
   }
 
-  async renderGif(imageUrl: string, { fillColor = '#000000' } = {}) {
+  async renderGif(
+    imageUrl: string,
+    {
+      fillColor = '#000000',
+      scaleMode = 'fit', // 'fit' or 'zoom'
+    } = {}
+  ) {
     this.resetDisplay();
     const response = await fetch(imageUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -107,6 +115,50 @@ class DeviceRenderer {
     // Initialize background
     compositedContext.fillStyle = fillColor;
     compositedContext.fillRect(0, 0, compositedCanvas.width, compositedCanvas.height);
+
+    // Calculate scaling dimensions based on mode
+    const calculateScalingDimensions = (
+      sourceWidth: number,
+      sourceHeight: number,
+      targetWidth: number,
+      targetHeight: number
+    ) => {
+      const sourceRatio = sourceWidth / sourceHeight;
+      const targetRatio = targetWidth / targetHeight;
+
+      if (scaleMode === 'zoom' || this.width === this.height) {
+        // Scale to fill, maintain aspect ratio
+        if (sourceRatio > targetRatio) {
+          const scale = targetHeight / sourceHeight;
+          const scaledWidth = sourceWidth * scale;
+          const xOffset = (targetWidth - scaledWidth) / 2;
+          return {
+            width: scaledWidth,
+            height: targetHeight,
+            x: xOffset,
+            y: 0,
+          };
+        } else {
+          const scale = targetWidth / sourceWidth;
+          const scaledHeight = sourceHeight * scale;
+          const yOffset = (targetHeight - scaledHeight) / 2;
+          return {
+            width: targetWidth,
+            height: scaledHeight,
+            x: 0,
+            y: yOffset,
+          };
+        }
+      } else {
+        // Fit mode - current behavior
+        return {
+          width: targetWidth,
+          height: targetHeight,
+          x: 0,
+          y: 0,
+        };
+      }
+    };
 
     const clearPreviousFrame = (prevFrame: ParsedFrame, dims: Dims | null) => {
       if (!dims) return;
@@ -186,18 +238,28 @@ class DeviceRenderer {
       // Reset composite operation
       compositedContext.globalCompositeOperation = 'source-over';
 
+      // Calculate scaling dimensions
+      const scaleDims = calculateScalingDimensions(
+        compositedCanvas.width,
+        compositedCanvas.height,
+        this.width,
+        this.height
+      );
+
       // Draw the final composited result to the main canvas
       this.canvasContext.clearRect(0, 0, this.width, this.height);
+      this.canvasContext.fillStyle = fillColor;
+      this.canvasContext.fillRect(0, 0, this.width, this.height);
       this.canvasContext.drawImage(
         compositedCanvas,
         0,
         0,
         compositedCanvas.width,
         compositedCanvas.height,
-        0,
-        0,
-        this.width,
-        this.height
+        scaleDims.x,
+        scaleDims.y,
+        scaleDims.width,
+        scaleDims.height
       );
 
       // Render to device
@@ -273,9 +335,10 @@ class DeviceRenderer {
     showSeconds = false,
     showAMPM = false,
     showDate = false,
+    showWeather = false,
   } = {}) {
     this.resetDisplay();
-    const renderClock = () => {
+    const renderClock = async () => {
       // Clear canvas for new frame
       this.canvasContext.clearRect(0, 0, this.width, this.height);
 
@@ -297,8 +360,14 @@ class DeviceRenderer {
       // Set color and render the entire clock text centered
       const options: DrawOptions = {
         color: textColor,
-        backgroundColor: '#000',
       };
+      if (showWeather) {
+        const currentTemperature = await this.weather.getTemperatureAtHour(now);
+        if (currentTemperature) {
+          const temperatureText = `${currentTemperature.temperature}°F`;
+          this.font.drawText(this.canvasContext, temperatureText, x, y - 24, options);
+        }
+      }
       if (showDate) {
         const date = now.toLocaleDateString('en-US', {
           weekday: 'long',
