@@ -363,10 +363,16 @@ class DeviceRenderer {
         color: textColor,
       };
       if (showWeather) {
-        const currentTemperature = await this.weather.getTemperatureAtHour(now);
+        const yPos = y - (showDate ? 24 : 12);
+        await this.weather.getWeatherData();
+        const mappedTemperatureData = await this.weather.mapTemperatureData();
+        const currentTemperature = await this.weather.getTemperatureAtHour(
+          mappedTemperatureData,
+          now
+        );
         if (currentTemperature) {
           const temperatureText = `${currentTemperature.temperature}°F`;
-          this.font.drawText(this.canvasContext, temperatureText, x, y - 24, options);
+          this.font.drawText(this.canvasContext, temperatureText, x, yPos, options);
         }
       }
       if (showDate) {

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" type="text/javascript" defer></script>
+    <title>Document</title>
+  </head>
+  <body>
+    <select name="device-select" id="device-select">
+      <option value="all">All</option>
+    </select>
+    <div id="display-text-container">
+      <h1>Display text</h1>
+      <div>
+        <label for="input-text">Text:</label>
+        <input type="text" name="input-text" id="input-text" />
+      </div>
+      <div>
+        <label for="text-color">Text color</label>
+        <input type="color" name="text-color" id="text-color" value="#FFFFFF" />
+      </div>
+      <button id="btn-display-text">Display text</button>
+    </div>
+    <div id="display-image-container">
+      <h1>Display image</h1>
+      <label for="input-image">Image:</label>
+      <input type="text" name="input-image" id="input-image" />
+      <button id="btn-display-image">Display image</button>
+    </div>
+    <div id="display-clock-container">
+      <h1>Display clock</h1>
+      <div>
+        <label for="show-weather">Show Weather</label>
+        <input type="checkbox" name="show-weather" id="show-weather" checked />
+      </div>
+      <div>
+        <label for="show-date">Show date</label>
+        <input type="checkbox" name="show-date" id="show-date" checked />
+      </div>
+      <div>
+        <label for="show-seconds">Show seconds</label>
+        <input type="checkbox" name="show-seconds" id="show-seconds" checked />
+      </div>
+      <div>
+        <label for="show-ampm">Show ampm</label>
+        <input type="checkbox" name="show-ampm" id="show-ampm" />
+      </div>
+      <div>
+        <label for="text-color">Text color</label>
+        <input type="color" name="text-color" id="text-color" value="#FFFFFF" />
+      </div>
+      <button id="btn-display-clock">Display clock</button>
+    </div>
+  </body>
+</html>

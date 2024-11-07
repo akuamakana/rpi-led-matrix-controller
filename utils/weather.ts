@@ -30,7 +30,6 @@ class WeatherOpenMateo {
     }
     const response = await fetch(this.url);
     const data = await response.json();
-    console.log(data);
     this.weatherData = data;
     return data;
   }
@@ -49,21 +48,17 @@ class WeatherOpenMateo {
     return this.mappedTemperatureData;
   }
 
-  async getTemperatureAtHour(targetDate: Date): Promise<TemperatureReading> {
-    if (!this.mappedTemperatureData) {
-      await this.mapTemperatureData();
-    }
-    const currentTemperature = this.mappedTemperatureData.find(
+  async getTemperatureAtHour(
+    mappedTemperatureData: TemperatureReading[],
+    targetDate: Date
+  ): Promise<TemperatureReading | undefined> {
+    const currentTemperature = mappedTemperatureData.find(
       ({ date }) =>
         date.getFullYear() === targetDate.getFullYear() &&
         date.getMonth() === targetDate.getMonth() &&
         date.getDate() === targetDate.getDate() &&
         date.getHours() === targetDate.getHours()
     );
-    if (!currentTemperature) {
-      this.weatherData = null;
-      return this.getTemperatureAtHour(targetDate);
-    }
     return currentTemperature;
   }
 }

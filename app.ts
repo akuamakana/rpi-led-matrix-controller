@@ -4,11 +4,13 @@ import { Device } from 'node-pixel-pusher/dist/types';
 import express, { Request, Response } from 'express';
 import { isGif } from './utils/helpers.js';
 import { BDFFont, createBDFFont } from './utils/bdf-font.js';
+const path = require('path');
 
 const service = new PixelPusher.Service();
 let deviceRenderers: DeviceRenderer[] = [];
 const app = express();
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../ui')));
 let font: BDFFont;
 
 (async () => {
@@ -35,8 +37,12 @@ function validateDeviceMacAddress(macAddress: string): void {
   }
 }
 
+app.get('/', (req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '../ui/index.html'));
+});
+
 // Get connected devices
-app.get('/connectedDevices', (req: Request, res: Response) => {
+app.get('/connectedDevices', async (req: Request, res: Response) => {
   try {
     const devices = deviceRenderers.map((deviceRenderer, index) => ({
       macAddress: deviceRenderer.device.deviceData.macAddress,
